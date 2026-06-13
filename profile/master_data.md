@@ -134,6 +134,17 @@
 
 ## 4. KEY PROJECTS
 
+### Campus51 — ATOM Enterprise Advisory (AI-Powered L&D)
+**Campus51 | EdTech / AI / Corporate Learning | 2025–Present**
+- Providing BD and market entry advisory for Campus51's flagship AI product: **ATOM (Adaptive Teaching Operating Model)**
+- ATOM creates publication-ready professional courses in under 5 minutes — 99.8% cost reduction vs traditional L&D ($15K–$50K/course), 600x faster, 98% accuracy
+- Product addresses $87B Instructional Design Services industry via end-to-end AI automation
+- Output includes: structured curriculum (ADDIE, Bloom's, Gagné's), voice narration (29 languages), SCORM-compliant LMS packages, assessments, photorealistic imagery
+- Role: advising on enterprise partnerships, Saudi/GCC market positioning, and client acquisition strategy for a product with strong Vision 2030 workforce development alignment
+- *Sector relevance: Corporate Learning, EdTech, AI, L&D enterprise sales*
+
+---
+
 ### Rayan — Water Supply Chain Platform for Hajj/Umrah
 **Sahat Venture Studio** | Saudi Arabia | 2024–2025
 - Led transformation from concept to structured digital initiative for Hajj-related water-giving charitable services
@@ -296,6 +307,10 @@ Business Model Canvas | Lean Canvas | Design Thinking | KPI/OKR Dashboards | CRM
 ### Training / Advisory / Consulting
 **أبرز:** Speaker credentials + Hult Prize Judge + MicroMentor + workshops (TIEC/AUC) + soft landing methodology
 **تخفي:** Sales agent numbers
+
+### Corporate Learning / EdTech / L&D
+**أبرز:** Campus51/ATOM advisory + BD Manager at Corporate Learning MNC scoring context + Sahat training workshops (TIEC/AUC) + Speaker/Trainer credentials + HOMEi team training/onboarding
+**تخفي:** Early pharmacy roles + warehouse
 
 ### Innovation / Program Management (Incubator/Accelerator)
 **أبرز:** IBTECAR consulting framing + Rayan project end-to-end + program design + bilingual + proposal writing
