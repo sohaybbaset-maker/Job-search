@@ -101,6 +101,15 @@ jobs:
               "portfolio": 25,
               "ecosystem": 25,
               "incubat": 20,
+              "accelerat": 20,
+              "entrepreneurship": 30,
+              "entrepreneur": 25,
+              "innovation hub": 25,
+              "startup ecosystem": 30,
+              "soft landing": 35,
+              "market expansion": 30,
+              "monsha'at": 25,
+              "vision 2030": 20,
               # Strategy/ops — moderate
               "strategy": 20,
               "strategic": 15,
@@ -189,29 +198,56 @@ jobs:
               all_jobs.extend(jobs)
               print(f"  [{source}] {len(jobs)} candidates")
 
-          # ── python-jobspy: LinkedIn ──
+          # Entrepreneurship/ecosystem titles are also valid candidates
+          ECOSYSTEM_KEYWORDS = [
+              "entrepreneurship", "ecosystem", "incubat", "accelerat",
+              "venture builder", "startup program", "innovation hub",
+              "innovation director", "innovation manager",
+          ]
+
+          # ── python-jobspy: LinkedIn — 2 searches (BD/GM + Entrepreneurship) ──
           print("\n── LinkedIn (python-jobspy) ──")
           try:
               from jobspy import scrape_jobs
-              df = scrape_jobs(
-                  site_name=["linkedin"],
-                  search_term="Business Development VP Director General Manager Saudi Arabia",
-                  location="Riyadh, Saudi Arabia",
-                  results_wanted=40,
-                  hours_old=72,
-                  verbose=0,
-              )
+              li_raw = []
+              for li_term in [
+                  "Business Development VP Director General Manager Saudi Arabia",
+                  "Entrepreneurship Ecosystem Startup Innovation Director Saudi Arabia",
+              ]:
+                  try:
+                      df = scrape_jobs(
+                          site_name=["linkedin"],
+                          search_term=li_term,
+                          location="Riyadh, Saudi Arabia",
+                          results_wanted=30,
+                          hours_old=72,
+                          verbose=0,
+                      )
+                      for _, row in df.iterrows():
+                          title = str(row.get("title", "")).strip()
+                          if title and title != "nan":
+                              li_raw.append({
+                                  "title":       title,
+                                  "company":     str(row.get("company","")).replace("nan","").strip(),
+                                  "url":         str(row.get("job_url","")).replace("nan","").strip(),
+                                  "description": str(row.get("description","")).replace("nan","").strip(),
+                                  "source":      "LinkedIn",
+                              })
+                  except Exception as e:
+                      print(f"  LinkedIn search error ({li_term[:30]}...): {e}")
+
+              # Dedup + pre-filter: keep BD/GM candidates OR ecosystem titles
+              seen_li = set()
               li = []
-              for _, row in df.iterrows():
-                  title = str(row.get("title", "")).strip()
-                  if title and title != "nan" and is_candidate(title):
-                      li.append({
-                          "title":       title,
-                          "company":     str(row.get("company", "")).replace("nan", "").strip(),
-                          "url":         str(row.get("job_url", "")).replace("nan", "").strip(),
-                          "description": str(row.get("description", "")).replace("nan", "").strip(),
-                          "source":      "LinkedIn",
-                      })
+              for j in li_raw:
+                  k = j["title"].lower()[:45]
+                  if k in seen_li:
+                      continue
+                  seen_li.add(k)
+                  t = j["title"].lower()
+                  if is_candidate(j["title"]) or any(x in t for x in ECOSYSTEM_KEYWORDS):
+                      li.append(j)
+
               record("LinkedIn", li)
           except Exception as e:
               print(f"  LinkedIn error: {e}")
