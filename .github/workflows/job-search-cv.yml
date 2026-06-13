@@ -1,4 +1,4 @@
-name: Daily Job Search — Michael Page Riyadh
+name: Daily Job Search — Multi-Source Riyadh (9 Platforms)
 
 on:
   schedule:
@@ -22,111 +22,333 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4 lxml
+        run: pip install requests beautifulsoup4 lxml python-jobspy
 
-      - name: Run job search
+      - name: Run multi-source job search
         id: search
         env:
           TARGET_EMAIL: sohaybbaset@gmail.com
         run: |
           python - <<'PYEOF'
-          import os, json, datetime, requests
+          import os, datetime, requests
           from bs4 import BeautifulSoup
+          from collections import Counter
 
-          TODAY = datetime.date.today().isoformat()
+          TODAY    = datetime.date.today().isoformat()
           KEYWORDS = [
               "VP", "Vice President", "Director", "General Manager",
               "Country Manager", "Head of", "Business Development",
-              "Strategy", "Market Entry",
+              "Chief Business", "CBDO", "Strategy", "Market Entry",
+              "Chief Executive", "Managing Director", "Commercial Director",
+              "Head of Sales", "Head of Partnerships",
           ]
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              "User-Agent": (
+                  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+              ),
               "Accept-Language": "en-US,en;q=0.9",
               "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           }
 
-          # Try multiple URLs — SA domain may be geo-restricted from GitHub runners
-          CANDIDATES = [
-              ("https://www.michaelpage.com/jobs/saudi-arabia/riyadh", "https://www.michaelpage.com"),
-              ("https://www.michaelpage.com/jobs/saudi-arabia", "https://www.michaelpage.com"),
-              ("https://www.michaelpage.ae/jobs/saudi-arabia", "https://www.michaelpage.ae"),
-          ]
+          all_jobs     = []   # list of dicts: title, company, url, source
+          source_stats = {}   # source -> count
 
-          jobs = []
-          SEARCH_URL = CANDIDATES[0][0]
-          for url, base in CANDIDATES:
+          def relevant(title):
+              return any(k.lower() in title.lower() for k in KEYWORDS)
+
+          def record(source, jobs):
+              source_stats[source] = len(jobs)
+              all_jobs.extend(jobs)
+              print(f"  [{source}] {len(jobs)} roles")
+
+          # ────────────────────────────────────────────────────────
+          # BLOCK A: python-jobspy  →  Indeed · LinkedIn · Glassdoor · Google · Bayt
+          # ────────────────────────────────────────────────────────
+          print("\n── python-jobspy (Indeed / LinkedIn / Glassdoor / Google / Bayt) ──")
+          try:
+              from jobspy import scrape_jobs
+
+              # LinkedIn: one broad call (rate-limited platform — keep results low)
+              li_jobs = []
               try:
-                  resp = requests.get(url, headers=HEADERS, timeout=30)
-                  if resp.status_code != 200:
-                      continue
-                  soup = BeautifulSoup(resp.text, "lxml")
-                  cards = soup.select(
-                      "h2.job-title, h3.job-title, [class*='job-title'], "
-                      "a[data-ga-label], .job-card h2, .jobCard__title, "
-                      "h3[class*='title'], h2[class*='title']"
+                  df = scrape_jobs(
+                      site_name=["linkedin"],
+                      search_term="Business Development VP Director General Manager Saudi Arabia",
+                      location="Riyadh, Saudi Arabia",
+                      results_wanted=25,
+                      hours_old=72,
+                      verbose=0,
                   )
-                  for card in cards:
-                      title = card.get_text(strip=True)
-                      if len(title) < 5:
-                          continue
-                      if any(k.lower() in title.lower() for k in KEYWORDS):
-                          link_tag = card.find_parent("a") or card.find("a")
-                          href = link_tag["href"] if link_tag and link_tag.get("href") else url
-                          if href.startswith("/"):
-                              href = base + href
-                          jobs.append({"title": title, "url": href})
-                  SEARCH_URL = url
-                  if jobs:
-                      break
-              except Exception:
-                  continue
-          if not jobs:
-              jobs = [{"title": "No roles found — check michaelpage.com/jobs/saudi-arabia manually", "url": "https://www.michaelpage.com/jobs/saudi-arabia"}]
+                  for _, row in df.iterrows():
+                      title = str(row.get("title", "")).strip()
+                      if title and title != "nan" and relevant(title):
+                          li_jobs.append({
+                              "title":   title,
+                              "company": str(row.get("company", "")).strip().replace("nan", ""),
+                              "url":     str(row.get("job_url", "")).strip().replace("nan", ""),
+                              "source":  "LinkedIn",
+                          })
+              except Exception as e:
+                  print(f"    LinkedIn error: {e}")
+              record("LinkedIn", li_jobs)
 
-          # Build Markdown report
+              # Indeed + Glassdoor + Google + Bayt: multiple search terms
+              SPY_TERMS = [
+                  "VP Business Development Riyadh",
+                  "Director Business Development Saudi Arabia",
+                  "General Manager Saudi Arabia",
+                  "Country Manager Saudi Arabia",
+                  "Head of Business Development Riyadh",
+              ]
+              SPY_SITES = ["indeed", "glassdoor", "google", "bayt"]
+              raw_spy = []
+              for term in SPY_TERMS:
+                  try:
+                      df = scrape_jobs(
+                          site_name=SPY_SITES,
+                          search_term=term,
+                          location="Riyadh, Saudi Arabia",
+                          results_wanted=30,
+                          hours_old=72,
+                          country_indeed="Saudi Arabia",
+                          verbose=0,
+                      )
+                      for _, row in df.iterrows():
+                          title = str(row.get("title", "")).strip()
+                          site  = str(row.get("site",  "")).strip()
+                          if title and title != "nan" and relevant(title):
+                              raw_spy.append({
+                                  "title":   title,
+                                  "company": str(row.get("company",  "")).strip().replace("nan", ""),
+                                  "url":     str(row.get("job_url",  "")).strip().replace("nan", ""),
+                                  "source":  site.title() if site else "JobSpy",
+                              })
+                  except Exception as e:
+                      print(f"    jobspy term error ({term}): {e}")
+
+              # Per-source dedup (title+company key)
+              seen_spy = set()
+              for j in raw_spy:
+                  key = (j["title"].lower()[:45], j["company"].lower()[:20])
+                  if key not in seen_spy:
+                      seen_spy.add(key)
+                      all_jobs.append(j)
+
+              # Update stats per platform
+              for src in ["Indeed", "Glassdoor", "Google", "Bayt"]:
+                  cnt = sum(1 for j in raw_spy if j["source"].lower() == src.lower())
+                  source_stats[src] = cnt
+                  print(f"  [{src}] {cnt} roles")
+
+          except Exception as e:
+              print(f"  [ERROR] python-jobspy block failed: {e}")
+              for src in ["LinkedIn", "Indeed", "Glassdoor", "Google", "Bayt"]:
+                  source_stats.setdefault(src, 0)
+
+          # ────────────────────────────────────────────────────────
+          # BLOCK B: HTML scrapers  →  Michael Page · GulfTalent · Naukrigulf · Robert Walters
+          # ────────────────────────────────────────────────────────
+
+          def html_scrape(source, candidates, selectors, base_fallback=""):
+              """Generic HTML scraper with multiple URL candidates and CSS selector list."""
+              jobs = []
+              for url, base in candidates:
+                  try:
+                      resp = requests.get(url, headers=HEADERS, timeout=30)
+                      if resp.status_code != 200:
+                          continue
+                      soup = BeautifulSoup(resp.text, "lxml")
+                      for sel in selectors:
+                          for card in soup.select(sel):
+                              title = card.get_text(strip=True)
+                              if len(title) < 5 or not relevant(title):
+                                  continue
+                              link = (
+                                  card if card.name == "a"
+                                  else (card.find("a") or card.find_parent("a"))
+                              )
+                              href = (link["href"] if link and link.get("href") else url)
+                              if href.startswith("/"):
+                                  href = base + href
+                              jobs.append({"title": title, "company": "", "url": href, "source": source})
+                      if jobs:
+                          break
+                  except Exception as e:
+                      print(f"    {source} url error ({url}): {e}")
+              return jobs
+
+          # ── Michael Page ──
+          print("\n── Michael Page ──")
+          record("Michael Page", html_scrape(
+              "Michael Page",
+              [
+                  ("https://www.michaelpage.ae/jobs/saudi-arabia",         "https://www.michaelpage.ae"),
+                  ("https://www.michaelpage.com/jobs/saudi-arabia/riyadh", "https://www.michaelpage.com"),
+              ],
+              [
+                  "h2.job-title", "h3.job-title", "[class*='job-title']",
+                  "a[data-ga-label]", ".job-card h2", ".jobCard__title",
+                  "h3[class*='title']", "h2[class*='title']",
+              ],
+          ))
+
+          # ── GulfTalent ──
+          print("\n── GulfTalent ──")
+          gt_urls = [
+              ("https://www.gulftalent.com/saudi-arabia/jobs/title/business-development", "https://www.gulftalent.com"),
+              ("https://www.gulftalent.com/saudi-arabia/jobs/title/general-manager",      "https://www.gulftalent.com"),
+              ("https://www.gulftalent.com/saudi-arabia/jobs/title/vice-president",       "https://www.gulftalent.com"),
+              ("https://www.gulftalent.com/saudi-arabia/jobs/title/strategy-director",    "https://www.gulftalent.com"),
+          ]
+          gt_sel = [
+              "h2.job_title", "h3.job_title", ".job-title a",
+              "[class*='jobtitle']", "[class*='job_title']",
+              ".listing-item h2", ".listing-item h3",
+              ".job-listing-item__title", "h2 a[href*='/job']", "h3 a[href*='/job']",
+          ]
+          gt_jobs = []
+          for url, base in gt_urls:
+              gt_jobs.extend(html_scrape("GulfTalent", [(url, base)], gt_sel))
+          seen_gt = set()
+          gt_unique = []
+          for j in gt_jobs:
+              k = j["title"].lower()[:45]
+              if k not in seen_gt:
+                  seen_gt.add(k)
+                  gt_unique.append(j)
+          record("GulfTalent", gt_unique)
+
+          # ── Naukrigulf ──
+          print("\n── Naukrigulf ──")
+          ng_urls = [
+              ("https://www.naukrigulf.com/vp-jobs-in-saudi-arabia",                          "https://www.naukrigulf.com"),
+              ("https://www.naukrigulf.com/director-business-development-jobs-in-saudi-arabia","https://www.naukrigulf.com"),
+              ("https://www.naukrigulf.com/general-manager-jobs-in-saudi-arabia",             "https://www.naukrigulf.com"),
+              ("https://www.naukrigulf.com/country-manager-jobs-in-saudi-arabia",             "https://www.naukrigulf.com"),
+          ]
+          ng_sel = [
+              ".designation-title", ".job-title", ".info-position a",
+              "[class*='designation'] a", "h2 a[href*='/job/']", "h3 a[href*='/job/']",
+              ".search-result-content h2 a", ".search-result-content h3 a",
+          ]
+          ng_jobs = []
+          for url, base in ng_urls:
+              ng_jobs.extend(html_scrape("Naukrigulf", [(url, base)], ng_sel))
+          seen_ng = set()
+          ng_unique = []
+          for j in ng_jobs:
+              k = j["title"].lower()[:45]
+              if k not in seen_ng:
+                  seen_ng.add(k)
+                  ng_unique.append(j)
+          record("Naukrigulf", ng_unique)
+
+          # ── Robert Walters ──
+          print("\n── Robert Walters ──")
+          record("Robert Walters", html_scrape(
+              "Robert Walters",
+              [("https://www.robertwalters.ae/jobs/saudi-arabia.html", "https://www.robertwalters.ae")],
+              [
+                  ".job-result__title", ".job-title a",
+                  "[class*='job-result'] h2 a", "[class*='job-result'] h3 a",
+                  ".search-results__item h2 a", ".search-results__item h3 a",
+                  "h2 a[href*='/jobs/']", "h3 a[href*='/jobs/']",
+              ],
+          ))
+
+          # ────────────────────────────────────────────────────────
+          # GLOBAL DEDUPLICATION  (by normalised title)
+          # ────────────────────────────────────────────────────────
+          seen_global = set()
+          final_jobs  = []
+          for j in all_jobs:
+              key = j["title"].lower()[:50]
+              if key not in seen_global:
+                  seen_global.add(key)
+                  final_jobs.append(j)
+
+          total = len(final_jobs)
+
+          # ────────────────────────────────────────────────────────
+          # BUILD MARKDOWN REPORT
+          # ────────────────────────────────────────────────────────
           lines = [
               f"# Job Search Report — {TODAY}\n",
-              "**Platform:** Michael Page  ",
+              "**Platforms:** Michael Page · GulfTalent · Indeed · LinkedIn · Glassdoor · Google Jobs · Bayt · Naukrigulf · Robert Walters  ",
               "**Location:** Riyadh, Saudi Arabia  ",
-              "**Seniority:** VP / Director / GM / Country Manager  \n",
+              "**Seniority:** VP / Director / GM / Country Manager / Head of BD  \n",
               "---\n",
-              "## Results\n",
-              "| # | Title | Link |",
-              "|---|-------|------|",
+              "## Source Summary\n",
+              "| Platform | Roles Found |",
+              "|----------|-------------|",
           ]
-          for i, j in enumerate(jobs, 1):
-              lines.append(f"| {i} | {j['title']} | [View]({j['url']}) |")
-
-          if not jobs:
-              lines.append("| — | No matching roles found today | — |")
+          for src in ["LinkedIn", "Indeed", "Glassdoor", "Google", "Bayt",
+                      "Michael Page", "GulfTalent", "Naukrigulf", "Robert Walters"]:
+              cnt = source_stats.get(src, 0)
+              lines.append(f"| {src} | {cnt} |")
+          lines += [
+              f"\n**Total unique roles: {total}**\n",
+              "---\n",
+              "## All Roles\n",
+              "| # | Title | Company | Source | Link |",
+              "|---|-------|---------|--------|------|",
+          ]
+          for i, j in enumerate(final_jobs, 1):
+              co   = j.get("company") or "—"
+              src  = j.get("source",  "—")
+              url  = j.get("url",     "")
+              link = f"[View]({url})" if url else "—"
+              lines.append(f"| {i} | {j['title']} | {co} | {src} | {link} |")
 
           lines += [
               "\n---\n",
-              f"*Total found: {len(jobs)}*  ",
+              f"*Total unique roles: {total}*  ",
               f"*Generated by [job-search-cv.yml](../../.github/workflows/job-search-cv.yml)*",
           ]
 
-          report_dir = "reports"
+          report_dir  = "reports"
           os.makedirs(report_dir, exist_ok=True)
           report_path = f"{report_dir}/{TODAY}_report.md"
           with open(report_path, "w") as f:
               f.write("\n".join(lines))
 
-          # Write email body for next step
-          email_body = "\n".join([
+          # ────────────────────────────────────────────────────────
+          # BUILD EMAIL BODY
+          # ────────────────────────────────────────────────────────
+          email_lines = [
               f"Daily Job Search Report — {TODAY}",
-              "Michael Page · Riyadh · VP / Director / GM",
+              "Platforms: Michael Page · GulfTalent · Indeed · LinkedIn · Glassdoor · Google · Bayt · Naukrigulf · Robert Walters",
+              "Location: Riyadh, Saudi Arabia  |  Seniority: VP / Director / GM / Country Manager",
               "",
-          ] + [f"{i}. {j['title']}  {j['url']}" for i, j in enumerate(jobs, 1)] + [
+              "━━ Source Summary ━━",
+          ]
+          for src in ["LinkedIn", "Indeed", "Glassdoor", "Google", "Bayt",
+                      "Michael Page", "GulfTalent", "Naukrigulf", "Robert Walters"]:
+              email_lines.append(f"  {src:<18} {source_stats.get(src, 0)} roles")
+          email_lines += [
+              f"\n  TOTAL UNIQUE: {total} roles",
               "",
-              f"View all: https://www.michaelpage.com/jobs/saudi-arabia",
-          ])
-          with open("/tmp/email_body.txt", "w") as f:
-              f.write(email_body)
-          with open("/tmp/email_subject.txt", "w") as f:
-              f.write(f"Job Search Report {TODAY} — {len(jobs)} roles found")
+              "━━ All Roles ━━",
+          ]
+          for i, j in enumerate(final_jobs, 1):
+              co   = j.get("company", "")
+              src  = j.get("source",  "")
+              url  = j.get("url",     "")
+              line = f"{i:>3}. [{src}] {j['title']}"
+              if co and co not in ("nan", "—", ""):
+                  line += f"  @  {co}"
+              email_lines.append(line)
+              if url and url not in ("nan", ""):
+                  email_lines.append(f"      {url}")
 
-          print(f"Found {len(jobs)} roles. Report saved to {report_path}")
+          with open("/tmp/email_body.txt", "w") as f:
+              f.write("\n".join(email_lines))
+          with open("/tmp/email_subject.txt", "w") as f:
+              f.write(f"Job Search Report {TODAY} — {total} roles · 9 platforms")
+
+          print(f"\n✓ {total} unique roles found across {len(source_stats)} sources.")
+          print(f"✓ Report saved → {report_path}")
           PYEOF
 
       - name: Send email via SMTP
@@ -144,7 +366,7 @@ jobs:
           subject = open("/tmp/email_subject.txt").read().strip()
           body    = open("/tmp/email_body.txt").read().strip()
 
-          msg = MIMEText(body)
+          msg = MIMEText(body, "plain", "utf-8")
           msg["Subject"] = subject
           msg["From"]    = os.environ["SMTP_USER"]
           msg["To"]      = os.environ["TO_EMAIL"]
@@ -154,7 +376,7 @@ jobs:
               s.login(os.environ["SMTP_USER"], os.environ["SMTP_PASS"])
               s.send_message(msg)
 
-          print(f"Email sent to {os.environ['TO_EMAIL']}")
+          print(f"Email sent → {os.environ['TO_EMAIL']}")
           PYEOF
 
       - name: Commit report
