@@ -34,29 +34,54 @@ jobs:
           from bs4 import BeautifulSoup
 
           TODAY = datetime.date.today().isoformat()
-          SEARCH_URL = "https://www.michaelpage.com.sa/jobs/business-development"
-          HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; JobSearchBot/1.0)"}
           KEYWORDS = [
               "VP", "Vice President", "Director", "General Manager",
               "Country Manager", "Head of", "Business Development",
               "Strategy", "Market Entry",
           ]
+          HEADERS = {
+              "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              "Accept-Language": "en-US,en;q=0.9",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          }
 
-          try:
-              resp = requests.get(SEARCH_URL, headers=HEADERS, params={"location": "riyadh"}, timeout=30)
-              soup = BeautifulSoup(resp.text, "lxml")
-              cards = soup.select("h2.job-title, h3.job-title, [class*='job-title']")
-              jobs = []
-              for card in cards:
-                  title = card.get_text(strip=True)
-                  if any(k.lower() in title.lower() for k in KEYWORDS):
-                      link_tag = card.find_parent("a") or card.find("a")
-                      href = link_tag["href"] if link_tag else SEARCH_URL
-                      if href.startswith("/"):
-                          href = "https://www.michaelpage.com.sa" + href
-                      jobs.append({"title": title, "url": href})
-          except Exception as e:
-              jobs = [{"title": f"Scrape failed: {e}", "url": SEARCH_URL}]
+          # Try multiple URLs — SA domain may be geo-restricted from GitHub runners
+          CANDIDATES = [
+              ("https://www.michaelpage.com/jobs/saudi-arabia/riyadh", "https://www.michaelpage.com"),
+              ("https://www.michaelpage.com/jobs/saudi-arabia", "https://www.michaelpage.com"),
+              ("https://www.michaelpage.ae/jobs/saudi-arabia", "https://www.michaelpage.ae"),
+          ]
+
+          jobs = []
+          SEARCH_URL = CANDIDATES[0][0]
+          for url, base in CANDIDATES:
+              try:
+                  resp = requests.get(url, headers=HEADERS, timeout=30)
+                  if resp.status_code != 200:
+                      continue
+                  soup = BeautifulSoup(resp.text, "lxml")
+                  cards = soup.select(
+                      "h2.job-title, h3.job-title, [class*='job-title'], "
+                      "a[data-ga-label], .job-card h2, .jobCard__title, "
+                      "h3[class*='title'], h2[class*='title']"
+                  )
+                  for card in cards:
+                      title = card.get_text(strip=True)
+                      if len(title) < 5:
+                          continue
+                      if any(k.lower() in title.lower() for k in KEYWORDS):
+                          link_tag = card.find_parent("a") or card.find("a")
+                          href = link_tag["href"] if link_tag and link_tag.get("href") else url
+                          if href.startswith("/"):
+                              href = base + href
+                          jobs.append({"title": title, "url": href})
+                  SEARCH_URL = url
+                  if jobs:
+                      break
+              except Exception:
+                  continue
+          if not jobs:
+              jobs = [{"title": "No roles found — check michaelpage.com/jobs/saudi-arabia manually", "url": "https://www.michaelpage.com/jobs/saudi-arabia"}]
 
           # Build Markdown report
           lines = [
@@ -94,7 +119,7 @@ jobs:
               "",
           ] + [f"{i}. {j['title']}  {j['url']}" for i, j in enumerate(jobs, 1)] + [
               "",
-              f"View all: {SEARCH_URL}#location=riyadh",
+              f"View all: https://www.michaelpage.com/jobs/saudi-arabia",
           ])
           with open("/tmp/email_body.txt", "w") as f:
               f.write(email_body)
