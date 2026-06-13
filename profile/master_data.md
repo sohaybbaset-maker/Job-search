@@ -134,14 +134,30 @@
 
 ## 4. KEY PROJECTS
 
-### Campus51 — ATOM Enterprise Advisory (AI-Powered L&D)
-**Campus51 | EdTech / AI / Corporate Learning | 2025–Present**
-- Providing BD and market entry advisory for Campus51's flagship AI product: **ATOM (Adaptive Teaching Operating Model)**
-- ATOM creates publication-ready professional courses in under 5 minutes — 99.8% cost reduction vs traditional L&D ($15K–$50K/course), 600x faster, 98% accuracy
-- Product addresses $87B Instructional Design Services industry via end-to-end AI automation
-- Output includes: structured curriculum (ADDIE, Bloom's, Gagné's), voice narration (29 languages), SCORM-compliant LMS packages, assessments, photorealistic imagery
-- Role: advising on enterprise partnerships, Saudi/GCC market positioning, and client acquisition strategy for a product with strong Vision 2030 workforce development alignment
-- *Sector relevance: Corporate Learning, EdTech, AI, L&D enterprise sales*
+### Campus51 — ATOM Strategic Advisory (AI-Powered L&D | Saudi Market Entry)
+**Independent Strategic Advisor** | Campus51 / EdTech / AI / Corporate Learning | **May 2026**
+
+**Context:**
+- Engaged as **Independent Strategic Advisor** to Campus51 for Saudi/GCC market entry and investment readiness
+- Delivered a **22-page Strategic Advisory Report**: *"Saudi Market Entry, Business Model & Investment Readiness Strategy"* (May 2026)
+- Branded and authored under own advisory practice: **SB | Sohayb Baset Strategic Advisor**
+
+**Product — ATOM (Adaptive Teaching Operating Model):**
+- AI platform that creates publication-ready professional courses in under 5 minutes
+- 99.8% cost reduction vs traditional L&D ($15K–$50K/course → <$75), 600x faster, 98% accuracy
+- Output: structured curriculum (ADDIE, Bloom's, Gagné's), voice narration (29 languages), SCORM-compliant LMS packages, assessments, photorealistic imagery
+- Addresses $87B global Instructional Design Services market; strong Vision 2030 workforce alignment (HRD Corp, HRDF, NTP)
+
+**Advisory Scope & Deliverables:**
+- **Market Entry Strategy**: assessed Saudi L&D landscape, regulatory environment (PIF ecosystem, Vision 2030 NTP), competitive positioning vs Coursera, LinkedIn Learning, local players
+- **Customer Segmentation & ICP**: mapped Tier 1 enterprise targets (Saudi Aramco, SABIC, NEOM, STC, Riyad Bank, Misk Foundation) + government training institutes + SME segment
+- **Business Model Design**: proposed three commercial tracks — Enterprise SaaS (SAR 75K–500K/yr), White-label/OEM (SAR 150K–300K setup + royalties), Government Contracts (SAR 1M–15M+); built revenue model and pricing hypotheses
+- **Investment Readiness**: mapped GCC-relevant investors — STV, Wa'ed Ventures, Raed Ventures, SEEDRA, 500 Global MENA, Flat6Labs, Wamda; outlined funding narrative, pre-Series A positioning
+- **Market Entry Options**: evaluated 3 pathways — Direct GTM, Channel Partner (reseller/SI), Government-first; recommended phased approach with partner-led entry
+- **Risk Register**: identified and mitigated 6 key risks (regulatory, localization, sales cycle, competition, pricing, talent)
+- **90-Day Action Plan + 6–12 Month Roadmap**: sequenced pilot launch, partner engagement, investor outreach, and government alignment milestones
+
+*Sector relevance: Corporate Learning, EdTech, AI, L&D enterprise sales, consulting, market entry, investment readiness*
 
 ---
 
@@ -305,15 +321,17 @@ Business Model Canvas | Lean Canvas | Design Thinking | KPI/OKR Dashboards | CRM
 **تخفي:** Sales metrics focus
 
 ### Training / Advisory / Consulting
-**أبرز:** Speaker credentials + Hult Prize Judge + MicroMentor + workshops (TIEC/AUC) + soft landing methodology
+**أبرز:** Campus51 — 22-page Strategic Advisory Report (own brand, own methodology) + soft landing playbook (35 companies) + Speaker credentials + Hult Prize Judge + MicroMentor + workshops (TIEC/AUC)
 **تخفي:** Sales agent numbers
+**Key proof point:** Independent advisory practice with delivered client output (market entry + investment readiness + 90-day plan)
 
 ### Corporate Learning / EdTech / L&D
-**أبرز:** Campus51/ATOM advisory + BD Manager at Corporate Learning MNC scoring context + Sahat training workshops (TIEC/AUC) + Speaker/Trainer credentials + HOMEi team training/onboarding
+**أبرز:** Campus51/ATOM Strategic Advisory (22-page report, May 2026) + ATOM product knowledge ($87B market, Vision 2030 NTP alignment, SCORM/LMS/ADDIE) + Sahat training workshops (TIEC/AUC) + Speaker/Trainer credentials + HOMEi team training/onboarding
 **تخفي:** Early pharmacy roles + warehouse
+**Key proof point:** Delivered structured go-to-market + pricing + investor mapping for AI-powered L&D product targeting Saudi enterprise
 
 ### Innovation / Program Management (Incubator/Accelerator)
-**أبرز:** IBTECAR consulting framing + Rayan project end-to-end + program design + bilingual + proposal writing
+**أبرز:** Campus51 advisory (structured advisory output) + Rayan project end-to-end + program design + bilingual + proposal writing + soft landing methodology (35 companies)
 **تخفي:** Revenue-heavy metrics
 
 ---
