@@ -1,4 +1,4 @@
-name: Daily Job Search — Multi-Source Riyadh (9 Platforms)
+name: Daily Job Search — Curated Riyadh (9 Platforms)
 
 on:
   schedule:
@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: pip install requests beautifulsoup4 lxml python-jobspy
 
-      - name: Run multi-source job search
+      - name: Run curated job search
         id: search
         env:
           TARGET_EMAIL: sohaybbaset@gmail.com
@@ -32,16 +32,8 @@ jobs:
           python - <<'PYEOF'
           import os, datetime, requests
           from bs4 import BeautifulSoup
-          from collections import Counter
 
-          TODAY    = datetime.date.today().isoformat()
-          KEYWORDS = [
-              "VP", "Vice President", "Director", "General Manager",
-              "Country Manager", "Head of", "Business Development",
-              "Chief Business", "CBDO", "Strategy", "Market Entry",
-              "Chief Executive", "Managing Director", "Commercial Director",
-              "Head of Sales", "Head of Partnerships",
-          ]
+          TODAY   = datetime.date.today().isoformat()
           HEADERS = {
               "User-Agent": (
                   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -51,62 +43,195 @@ jobs:
               "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           }
 
-          all_jobs     = []   # list of dicts: title, company, url, source
-          source_stats = {}   # source -> count
+          # ════════════════════════════════════════════════════════════
+          # PROFILE-BASED SCORING ENGINE
+          # Built for: Sohayb Baset — VP BD · Venture · PropTech · KSA
+          # ════════════════════════════════════════════════════════════
 
-          def relevant(title):
-              return any(k.lower() in title.lower() for k in KEYWORDS)
+          # Any of these → drop immediately, don't send
+          HARD_EXCLUDE = [
+              "saudi national", "nationals only", "saudiz",
+              "it director", "cio", "chief information officer",
+              "chief technology", "cto", "software engineer",
+              "data scientist", "devops", "cybersecurity", "network engineer",
+              "laundry", "construction equipment", "used truck",
+              "compliance officer", "anti-money", "aml", "audit",
+              "treasury", "tax manager", "legal counsel",
+              "internship", "graduate program", "entry level",
+              "media director", "head of media", "journalist",
+              "clinical", "radiolog", "surgeon", "pharmacist",
+              "oil & gas engineer", "petroleum engineer",
+              "head of it", "it solutions", "infrastructure director",
+              "project director",  # pure PM, not BD
+          ]
+
+          # Title must contain at least one of these (seniority gate)
+          SENIORITY_GATE = [
+              "vp", "vice president", "director", "general manager",
+              "country manager", "head of", "chief", "managing director",
+              "commercial director", "cbdo", "cbo", "cco",
+          ]
+
+          # Scoring: function match (what he does)
+          FUNCTION_SCORE = {
+              # Core BD/Growth — max boost
+              "business development": 40,
+              " bd ": 35,
+              "partnerships": 35,
+              "market entry": 40,
+              "commercial director": 35,
+              "revenue": 30,
+              "growth": 25,
+              "channel partner": 30,
+              "go-to-market": 35,
+              "strategic partnerships": 40,
+              # Sector strengths — strong boost
+              "real estate": 30,
+              "proptech": 35,
+              "property": 25,
+              "leasing": 20,
+              "corporate learning": 35,
+              "learning & development": 35,
+              "l&d": 30,
+              "edtech": 30,
+              "training": 20,
+              "venture": 30,
+              "startup": 25,
+              "investment": 25,
+              "portfolio": 25,
+              "ecosystem": 25,
+              "incubat": 20,
+              # Strategy/ops — moderate
+              "strategy": 20,
+              "strategic": 15,
+              "innovation": 15,
+              "cluster director": 20,
+              "regional": 15,
+              "sales director": 20,
+          }
+
+          # Sectors that are a mismatch — penalise
+          SECTOR_PENALTY = [
+              "medical device", "pharmaceutical", "clinical trial",
+              "oil and gas", "oil & gas", "petroleum", "mining",
+              "construction", "infrastructure", "facilities management",
+              "military", "defence", "defense",
+              "hotel", "hospitality", "food & beverage",
+              "media", "film", "entertainment",
+              "fashion", "retail operations",
+              "institutional sales",   # finance sector
+              "treasury", "asset management",
+          ]
+
+          SCORE_THRESHOLD = 60  # only send roles above this
+
+          def score_job(title, description=""):
+              t = title.lower()
+              d = description.lower() if description else ""
+              combined = t + " " + d
+
+              # Hard exclude check
+              if any(x in combined for x in HARD_EXCLUDE):
+                  return 0, "excluded"
+
+              # Seniority gate — must pass
+              if not any(x in t for x in SENIORITY_GATE):
+                  return 0, "too junior"
+
+              score = 0
+
+              # Seniority level points (10-30)
+              if any(x in t for x in ["vp", "vice president", "chief", "cbdo", "cbo"]):
+                  score += 30
+              elif any(x in t for x in ["director", "general manager", "managing director", "country manager", "head of"]):
+                  score += 25
+              else:
+                  score += 10
+
+              # Function match (0-40)
+              fn_score = 0
+              for kw, pts in FUNCTION_SCORE.items():
+                  if kw in combined:
+                      fn_score = max(fn_score, pts)
+              score += fn_score
+
+              # Sector penalty (-15)
+              if any(x in combined for x in SECTOR_PENALTY):
+                  score -= 15
+
+              # KSA/GCC region bonus (+5)
+              if any(x in combined for x in ["saudi", "ksa", "riyadh", "gcc", "gulf"]):
+                  score += 5
+
+              label = "🟢 Strong Match" if score >= 80 else "🟡 Good Match"
+              return score, label
+
+          # ════════════════════════════════════════════════════════════
+          # SCRAPING SOURCES
+          # ════════════════════════════════════════════════════════════
+
+          # Broad initial keywords — scoring will filter down
+          SEARCH_KEYWORDS = [
+              "VP", "Vice President", "Director", "General Manager",
+              "Country Manager", "Head of", "Business Development",
+              "Chief Business", "Managing Director", "Commercial Director",
+              "Head of Partnerships", "Head of Sales",
+          ]
+
+          all_jobs     = []
+          source_stats = {}
+
+          def is_candidate(title):
+              return any(k.lower() in title.lower() for k in SEARCH_KEYWORDS)
 
           def record(source, jobs):
               source_stats[source] = len(jobs)
               all_jobs.extend(jobs)
-              print(f"  [{source}] {len(jobs)} roles")
+              print(f"  [{source}] {len(jobs)} candidates")
 
-          # ────────────────────────────────────────────────────────
-          # BLOCK A: python-jobspy  →  Indeed · LinkedIn · Glassdoor · Google · Bayt
-          # ────────────────────────────────────────────────────────
-          print("\n── python-jobspy (Indeed / LinkedIn / Glassdoor / Google / Bayt) ──")
+          # ── python-jobspy: LinkedIn ──
+          print("\n── LinkedIn (python-jobspy) ──")
           try:
               from jobspy import scrape_jobs
+              df = scrape_jobs(
+                  site_name=["linkedin"],
+                  search_term="Business Development VP Director General Manager Saudi Arabia",
+                  location="Riyadh, Saudi Arabia",
+                  results_wanted=40,
+                  hours_old=72,
+                  verbose=0,
+              )
+              li = []
+              for _, row in df.iterrows():
+                  title = str(row.get("title", "")).strip()
+                  if title and title != "nan" and is_candidate(title):
+                      li.append({
+                          "title":       title,
+                          "company":     str(row.get("company", "")).replace("nan", "").strip(),
+                          "url":         str(row.get("job_url", "")).replace("nan", "").strip(),
+                          "description": str(row.get("description", "")).replace("nan", "").strip(),
+                          "source":      "LinkedIn",
+                      })
+              record("LinkedIn", li)
+          except Exception as e:
+              print(f"  LinkedIn error: {e}")
+              source_stats["LinkedIn"] = 0
 
-              # LinkedIn: one broad call (rate-limited platform — keep results low)
-              li_jobs = []
-              try:
-                  df = scrape_jobs(
-                      site_name=["linkedin"],
-                      search_term="Business Development VP Director General Manager Saudi Arabia",
-                      location="Riyadh, Saudi Arabia",
-                      results_wanted=25,
-                      hours_old=72,
-                      verbose=0,
-                  )
-                  for _, row in df.iterrows():
-                      title = str(row.get("title", "")).strip()
-                      if title and title != "nan" and relevant(title):
-                          li_jobs.append({
-                              "title":   title,
-                              "company": str(row.get("company", "")).strip().replace("nan", ""),
-                              "url":     str(row.get("job_url", "")).strip().replace("nan", ""),
-                              "source":  "LinkedIn",
-                          })
-              except Exception as e:
-                  print(f"    LinkedIn error: {e}")
-              record("LinkedIn", li_jobs)
-
-              # Indeed + Glassdoor + Google + Bayt: multiple search terms
+          # ── python-jobspy: Indeed + Glassdoor + Google + Bayt ──
+          print("\n── Indeed / Glassdoor / Google / Bayt (python-jobspy) ──")
+          try:
               SPY_TERMS = [
-                  "VP Business Development Riyadh",
-                  "Director Business Development Saudi Arabia",
+                  "VP Business Development Saudi Arabia",
+                  "Director Business Development Riyadh",
                   "General Manager Saudi Arabia",
                   "Country Manager Saudi Arabia",
-                  "Head of Business Development Riyadh",
+                  "Head of Partnerships Riyadh",
               ]
-              SPY_SITES = ["indeed", "glassdoor", "google", "bayt"]
-              raw_spy = []
+              raw = []
               for term in SPY_TERMS:
                   try:
                       df = scrape_jobs(
-                          site_name=SPY_SITES,
+                          site_name=["indeed", "glassdoor", "google", "bayt"],
                           search_term=term,
                           location="Riyadh, Saudi Arabia",
                           results_wanted=30,
@@ -117,41 +242,32 @@ jobs:
                       for _, row in df.iterrows():
                           title = str(row.get("title", "")).strip()
                           site  = str(row.get("site",  "")).strip()
-                          if title and title != "nan" and relevant(title):
-                              raw_spy.append({
-                                  "title":   title,
-                                  "company": str(row.get("company",  "")).strip().replace("nan", ""),
-                                  "url":     str(row.get("job_url",  "")).strip().replace("nan", ""),
-                                  "source":  site.title() if site else "JobSpy",
+                          if title and title != "nan" and is_candidate(title):
+                              raw.append({
+                                  "title":       title,
+                                  "company":     str(row.get("company", "")).replace("nan","").strip(),
+                                  "url":         str(row.get("job_url", "")).replace("nan","").strip(),
+                                  "description": str(row.get("description","")).replace("nan","").strip(),
+                                  "source":      site.title() or "JobSpy",
                               })
                   except Exception as e:
-                      print(f"    jobspy term error ({term}): {e}")
+                      print(f"  term error: {e}")
 
-              # Per-source dedup (title+company key)
-              seen_spy = set()
-              for j in raw_spy:
-                  key = (j["title"].lower()[:45], j["company"].lower()[:20])
-                  if key not in seen_spy:
-                      seen_spy.add(key)
+              seen = set()
+              for j in raw:
+                  k = j["title"].lower()[:45]
+                  if k not in seen:
+                      seen.add(k)
                       all_jobs.append(j)
-
-              # Update stats per platform
               for src in ["Indeed", "Glassdoor", "Google", "Bayt"]:
-                  cnt = sum(1 for j in raw_spy if j["source"].lower() == src.lower())
+                  cnt = sum(1 for j in raw if j["source"].lower() == src.lower())
                   source_stats[src] = cnt
-                  print(f"  [{src}] {cnt} roles")
-
+                  print(f"  [{src}] {cnt} candidates")
           except Exception as e:
-              print(f"  [ERROR] python-jobspy block failed: {e}")
-              for src in ["LinkedIn", "Indeed", "Glassdoor", "Google", "Bayt"]:
-                  source_stats.setdefault(src, 0)
+              print(f"  JobSpy block error: {e}")
 
-          # ────────────────────────────────────────────────────────
-          # BLOCK B: HTML scrapers  →  Michael Page · GulfTalent · Naukrigulf · Robert Walters
-          # ────────────────────────────────────────────────────────
-
-          def html_scrape(source, candidates, selectors, base_fallback=""):
-              """Generic HTML scraper with multiple URL candidates and CSS selector list."""
+          # ── HTML scrapers ──
+          def html_scrape(source, candidates, selectors):
               jobs = []
               for url, base in candidates:
                   try:
@@ -162,148 +278,130 @@ jobs:
                       for sel in selectors:
                           for card in soup.select(sel):
                               title = card.get_text(strip=True)
-                              if len(title) < 5 or not relevant(title):
+                              if len(title) < 5 or not is_candidate(title):
                                   continue
-                              link = (
-                                  card if card.name == "a"
-                                  else (card.find("a") or card.find_parent("a"))
-                              )
+                              link = card if card.name == "a" else (card.find("a") or card.find_parent("a"))
                               href = (link["href"] if link and link.get("href") else url)
                               if href.startswith("/"):
                                   href = base + href
-                              jobs.append({"title": title, "company": "", "url": href, "source": source})
+                              jobs.append({"title": title, "company": "", "url": href,
+                                           "description": "", "source": source})
                       if jobs:
                           break
                   except Exception as e:
-                      print(f"    {source} url error ({url}): {e}")
+                      print(f"  {source} error: {e}")
               return jobs
 
-          # ── Michael Page ──
           print("\n── Michael Page ──")
-          record("Michael Page", html_scrape(
-              "Michael Page",
-              [
-                  ("https://www.michaelpage.ae/jobs/saudi-arabia",         "https://www.michaelpage.ae"),
-                  ("https://www.michaelpage.com/jobs/saudi-arabia/riyadh", "https://www.michaelpage.com"),
-              ],
-              [
-                  "h2.job-title", "h3.job-title", "[class*='job-title']",
-                  "a[data-ga-label]", ".job-card h2", ".jobCard__title",
-                  "h3[class*='title']", "h2[class*='title']",
-              ],
-          ))
+          record("Michael Page", html_scrape("Michael Page", [
+              ("https://www.michaelpage.ae/jobs/saudi-arabia",          "https://www.michaelpage.ae"),
+              ("https://www.michaelpage.com/jobs/saudi-arabia/riyadh",  "https://www.michaelpage.com"),
+          ], ["h2.job-title","h3.job-title","[class*='job-title']","a[data-ga-label]",
+              ".job-card h2",".jobCard__title","h3[class*='title']","h2[class*='title']"]))
 
-          # ── GulfTalent ──
           print("\n── GulfTalent ──")
-          gt_urls = [
-              ("https://www.gulftalent.com/saudi-arabia/jobs/title/business-development", "https://www.gulftalent.com"),
-              ("https://www.gulftalent.com/saudi-arabia/jobs/title/general-manager",      "https://www.gulftalent.com"),
-              ("https://www.gulftalent.com/saudi-arabia/jobs/title/vice-president",       "https://www.gulftalent.com"),
-              ("https://www.gulftalent.com/saudi-arabia/jobs/title/strategy-director",    "https://www.gulftalent.com"),
-          ]
-          gt_sel = [
-              "h2.job_title", "h3.job_title", ".job-title a",
-              "[class*='jobtitle']", "[class*='job_title']",
-              ".listing-item h2", ".listing-item h3",
-              ".job-listing-item__title", "h2 a[href*='/job']", "h3 a[href*='/job']",
-          ]
-          gt_jobs = []
-          for url, base in gt_urls:
-              gt_jobs.extend(html_scrape("GulfTalent", [(url, base)], gt_sel))
+          gt_raw = []
+          for slug, base in [
+              ("business-development", "https://www.gulftalent.com"),
+              ("general-manager",      "https://www.gulftalent.com"),
+              ("vice-president",       "https://www.gulftalent.com"),
+          ]:
+              gt_raw.extend(html_scrape("GulfTalent",
+                  [(f"https://www.gulftalent.com/saudi-arabia/jobs/title/{slug}", base)],
+                  ["h2.job_title","h3.job_title",".job-title a","[class*='jobtitle']",
+                   ".listing-item h2",".listing-item h3",".job-listing-item__title",
+                   "h2 a[href*='/job']","h3 a[href*='/job']"]))
           seen_gt = set()
-          gt_unique = []
-          for j in gt_jobs:
+          for j in gt_raw:
               k = j["title"].lower()[:45]
               if k not in seen_gt:
                   seen_gt.add(k)
-                  gt_unique.append(j)
-          record("GulfTalent", gt_unique)
+                  all_jobs.append(j)
+          source_stats["GulfTalent"] = len([j for j in gt_raw if j["source"] == "GulfTalent"])
+          print(f"  [GulfTalent] {source_stats['GulfTalent']} candidates")
 
-          # ── Naukrigulf ──
           print("\n── Naukrigulf ──")
-          ng_urls = [
-              ("https://www.naukrigulf.com/vp-jobs-in-saudi-arabia",                          "https://www.naukrigulf.com"),
-              ("https://www.naukrigulf.com/director-business-development-jobs-in-saudi-arabia","https://www.naukrigulf.com"),
-              ("https://www.naukrigulf.com/general-manager-jobs-in-saudi-arabia",             "https://www.naukrigulf.com"),
-              ("https://www.naukrigulf.com/country-manager-jobs-in-saudi-arabia",             "https://www.naukrigulf.com"),
-          ]
-          ng_sel = [
-              ".designation-title", ".job-title", ".info-position a",
-              "[class*='designation'] a", "h2 a[href*='/job/']", "h3 a[href*='/job/']",
-              ".search-result-content h2 a", ".search-result-content h3 a",
-          ]
-          ng_jobs = []
-          for url, base in ng_urls:
-              ng_jobs.extend(html_scrape("Naukrigulf", [(url, base)], ng_sel))
+          ng_raw = []
+          for slug, base in [
+              ("vp-jobs-in-saudi-arabia",                           "https://www.naukrigulf.com"),
+              ("director-business-development-jobs-in-saudi-arabia","https://www.naukrigulf.com"),
+              ("general-manager-jobs-in-saudi-arabia",              "https://www.naukrigulf.com"),
+          ]:
+              ng_raw.extend(html_scrape("Naukrigulf",
+                  [(f"https://www.naukrigulf.com/{slug}", base)],
+                  [".designation-title",".job-title",".info-position a",
+                   "[class*='designation'] a","h2 a[href*='/job/']","h3 a[href*='/job/']"]))
           seen_ng = set()
-          ng_unique = []
-          for j in ng_jobs:
+          for j in ng_raw:
               k = j["title"].lower()[:45]
               if k not in seen_ng:
                   seen_ng.add(k)
-                  ng_unique.append(j)
-          record("Naukrigulf", ng_unique)
+                  all_jobs.append(j)
+          source_stats["Naukrigulf"] = len(ng_raw)
+          print(f"  [Naukrigulf] {source_stats['Naukrigulf']} candidates")
 
-          # ── Robert Walters ──
           print("\n── Robert Walters ──")
-          record("Robert Walters", html_scrape(
-              "Robert Walters",
-              [("https://www.robertwalters.ae/jobs/saudi-arabia.html", "https://www.robertwalters.ae")],
-              [
-                  ".job-result__title", ".job-title a",
-                  "[class*='job-result'] h2 a", "[class*='job-result'] h3 a",
-                  ".search-results__item h2 a", ".search-results__item h3 a",
-                  "h2 a[href*='/jobs/']", "h3 a[href*='/jobs/']",
-              ],
-          ))
+          record("Robert Walters", html_scrape("Robert Walters",
+              [("https://www.robertwalters.ae/jobs/saudi-arabia.html","https://www.robertwalters.ae")],
+              [".job-result__title",".job-title a","[class*='job-result'] h2 a",
+               ".search-results__item h2 a","h2 a[href*='/jobs/']"]))
 
-          # ────────────────────────────────────────────────────────
-          # GLOBAL DEDUPLICATION  (by normalised title)
-          # ────────────────────────────────────────────────────────
+          # ════════════════════════════════════════════════════════════
+          # SCORE + FILTER
+          # ════════════════════════════════════════════════════════════
+          print("\n── Scoring & filtering ──")
+
+          # Global dedup first
           seen_global = set()
-          final_jobs  = []
+          unique_jobs = []
           for j in all_jobs:
-              key = j["title"].lower()[:50]
-              if key not in seen_global:
-                  seen_global.add(key)
-                  final_jobs.append(j)
+              k = j["title"].lower()[:50]
+              if k not in seen_global:
+                  seen_global.add(k)
+                  unique_jobs.append(j)
 
-          total = len(final_jobs)
+          scored = []
+          for j in unique_jobs:
+              s, label = score_job(j["title"], j.get("description", ""))
+              if s >= SCORE_THRESHOLD:
+                  scored.append({**j, "score": s, "label": label})
 
-          # ────────────────────────────────────────────────────────
-          # BUILD MARKDOWN REPORT
-          # ────────────────────────────────────────────────────────
+          scored.sort(key=lambda x: x["score"], reverse=True)
+
+          total_scanned = len(unique_jobs)
+          total_sent    = len(scored)
+          print(f"  Scanned: {total_scanned}  →  Matched: {total_sent}")
+
+          # ════════════════════════════════════════════════════════════
+          # BUILD REPORT & EMAIL
+          # ════════════════════════════════════════════════════════════
           lines = [
               f"# Job Search Report — {TODAY}\n",
-              "**Platforms:** Michael Page · GulfTalent · Indeed · LinkedIn · Glassdoor · Google Jobs · Bayt · Naukrigulf · Robert Walters  ",
+              "**Platforms:** Michael Page · GulfTalent · Indeed · LinkedIn · Glassdoor · Google · Bayt · Naukrigulf · Robert Walters  ",
               "**Location:** Riyadh, Saudi Arabia  ",
-              "**Seniority:** VP / Director / GM / Country Manager / Head of BD  \n",
+              "**Profile match threshold:** 60 / 100\n",
               "---\n",
-              "## Source Summary\n",
-              "| Platform | Roles Found |",
-              "|----------|-------------|",
+              f"## Curated Matches ({total_sent} of {total_scanned} scanned)\n",
+              "| # | Score | Match | Title | Company | Source | Link |",
+              "|---|-------|-------|-------|---------|--------|------|",
           ]
-          for src in ["LinkedIn", "Indeed", "Glassdoor", "Google", "Bayt",
-                      "Michael Page", "GulfTalent", "Naukrigulf", "Robert Walters"]:
-              cnt = source_stats.get(src, 0)
-              lines.append(f"| {src} | {cnt} |")
-          lines += [
-              f"\n**Total unique roles: {total}**\n",
-              "---\n",
-              "## All Roles\n",
-              "| # | Title | Company | Source | Link |",
-              "|---|-------|---------|--------|------|",
-          ]
-          for i, j in enumerate(final_jobs, 1):
+          for i, j in enumerate(scored, 1):
               co   = j.get("company") or "—"
-              src  = j.get("source",  "—")
-              url  = j.get("url",     "")
+              url  = j.get("url", "")
               link = f"[View]({url})" if url else "—"
-              lines.append(f"| {i} | {j['title']} | {co} | {src} | {link} |")
+              lines.append(f"| {i} | {j['score']} | {j['label']} | {j['title']} | {co} | {j['source']} | {link} |")
 
           lines += [
               "\n---\n",
-              f"*Total unique roles: {total}*  ",
+              "## Source Scan Summary\n",
+              "| Platform | Scanned |",
+              "|----------|---------|",
+          ]
+          for src in ["LinkedIn","Indeed","Glassdoor","Google","Bayt",
+                      "Michael Page","GulfTalent","Naukrigulf","Robert Walters"]:
+              lines.append(f"| {src} | {source_stats.get(src, 0)} |")
+          lines += [
+              f"\n*{total_scanned} scanned → {total_sent} matched your profile*  ",
               f"*Generated by [job-search-cv.yml](../../.github/workflows/job-search-cv.yml)*",
           ]
 
@@ -313,42 +411,55 @@ jobs:
           with open(report_path, "w") as f:
               f.write("\n".join(lines))
 
-          # ────────────────────────────────────────────────────────
-          # BUILD EMAIL BODY
-          # ────────────────────────────────────────────────────────
-          email_lines = [
-              f"Daily Job Search Report — {TODAY}",
-              "Platforms: Michael Page · GulfTalent · Indeed · LinkedIn · Glassdoor · Google · Bayt · Naukrigulf · Robert Walters",
-              "Location: Riyadh, Saudi Arabia  |  Seniority: VP / Director / GM / Country Manager",
-              "",
-              "━━ Source Summary ━━",
-          ]
-          for src in ["LinkedIn", "Indeed", "Glassdoor", "Google", "Bayt",
-                      "Michael Page", "GulfTalent", "Naukrigulf", "Robert Walters"]:
-              email_lines.append(f"  {src:<18} {source_stats.get(src, 0)} roles")
-          email_lines += [
-              f"\n  TOTAL UNIQUE: {total} roles",
-              "",
-              "━━ All Roles ━━",
-          ]
-          for i, j in enumerate(final_jobs, 1):
-              co   = j.get("company", "")
-              src  = j.get("source",  "")
-              url  = j.get("url",     "")
-              line = f"{i:>3}. [{src}] {j['title']}"
-              if co and co not in ("nan", "—", ""):
-                  line += f"  @  {co}"
-              email_lines.append(line)
-              if url and url not in ("nan", ""):
-                  email_lines.append(f"      {url}")
+          # Email
+          if scored:
+              strong = [j for j in scored if j["label"].startswith("🟢")]
+              good   = [j for j in scored if j["label"].startswith("🟡")]
+
+              email_lines = [
+                  f"وظائف مناسبة ليك — {TODAY}",
+                  f"من {total_scanned} وظيفة مسحوبة → {total_sent} بتناسب بروفايلك فقط",
+                  "",
+              ]
+              if strong:
+                  email_lines.append("━━ 🟢 أقوى تطابق ━━")
+                  for i, j in enumerate(strong, 1):
+                      co  = j.get("company","")
+                      url = j.get("url","")
+                      email_lines.append(f"\n{i}. {j['title']}" + (f"  @  {co}" if co else ""))
+                      email_lines.append(f"   Score: {j['score']}/100  |  {j['source']}")
+                      if url:
+                          email_lines.append(f"   {url}")
+              if good:
+                  email_lines.append("\n━━ 🟡 تستحق النظر ━━")
+                  for i, j in enumerate(good, 1):
+                      co  = j.get("company","")
+                      url = j.get("url","")
+                      email_lines.append(f"\n{i}. {j['title']}" + (f"  @  {co}" if co else ""))
+                      email_lines.append(f"   Score: {j['score']}/100  |  {j['source']}")
+                      if url:
+                          email_lines.append(f"   {url}")
+              email_lines += [
+                  "",
+                  f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                  f"تم مسح {total_scanned} وظيفة من 9 مصادر",
+                  "المرشّح: سهيب باسيط | VP BD · PropTech · Venture · KSA",
+              ]
+              subject = f"وظائف مناسبة {TODAY} — {total_sent} من {total_scanned} 🎯"
+          else:
+              email_lines = [
+                  f"تقرير البحث — {TODAY}",
+                  f"مسحنا {total_scanned} وظيفة — لا يوجد تطابق كافٍ اليوم.",
+                  "سيتم إعادة المحاولة غداً.",
+              ]
+              subject = f"تقرير البحث {TODAY} — لا توجد وظائف مناسبة اليوم"
 
           with open("/tmp/email_body.txt", "w") as f:
               f.write("\n".join(email_lines))
           with open("/tmp/email_subject.txt", "w") as f:
-              f.write(f"Job Search Report {TODAY} — {total} roles · 9 platforms")
+              f.write(subject)
 
-          print(f"\n✓ {total} unique roles found across {len(source_stats)} sources.")
-          print(f"✓ Report saved → {report_path}")
+          print(f"\n✓ {total_sent} curated roles from {total_scanned} scanned.")
           PYEOF
 
       - name: Send email via SMTP
