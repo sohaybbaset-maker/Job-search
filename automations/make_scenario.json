@@ -1,0 +1,97 @@
+{
+  "name": "Michael Page Riyadh Job Search",
+  "description": "Daily automated search on Michael Page for senior BD/Strategy roles in Riyadh. Emails results to sohaybbaset@gmail.com.",
+  "scheduling": {
+    "type": "SCHEDULE",
+    "interval": 1440,
+    "startedAt": "05:00:00",
+    "timezone": "Asia/Riyadh"
+  },
+  "modules": [
+    {
+      "id": 1,
+      "type": "builtin:BasicTrigger",
+      "name": "Scheduling",
+      "parameters": {}
+    },
+    {
+      "id": 2,
+      "type": "http:ActionSendData",
+      "name": "Fetch Michael Page Listings",
+      "parameters": {
+        "url": "https://www.michaelpage.com.sa/jobs/business-development",
+        "method": "GET",
+        "headers": [
+          {
+            "name": "Accept",
+            "value": "text/html"
+          },
+          {
+            "name": "User-Agent",
+            "value": "Mozilla/5.0 (compatible; JobSearchBot/1.0)"
+          }
+        ],
+        "qs": [
+          { "name": "location", "value": "riyadh" },
+          { "name": "contractType", "value": "permanent" }
+        ],
+        "response": {
+          "type": "text"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "builtin:BasicTextAggregator",
+      "name": "Extract Job Titles",
+      "parameters": {
+        "sourceKey": "2.data",
+        "pattern": "<h2[^>]*class=\"[^\"]*job-title[^\"]*\"[^>]*>([\\s\\S]*?)<\\/h2>",
+        "matchGroup": 1
+      }
+    },
+    {
+      "id": 4,
+      "type": "google:ActionSendEmail",
+      "name": "Email Results",
+      "parameters": {
+        "to": "sohaybbaset@gmail.com",
+        "subject": "Job Search Report — {{formatDate(now; 'YYYY-MM-DD')}}",
+        "content": "Daily Job Search Report — {{formatDate(now; 'YYYY-MM-DD')}}\n\nMichael Page · Riyadh · VP / Director / GM\n\n{{3.text}}\n\nView all roles: https://www.michaelpage.com.sa/jobs/business-development#location=riyadh",
+        "contentType": "text"
+      },
+      "connection": {
+        "type": "google",
+        "account": "sohaybbaset@gmail.com"
+      }
+    }
+  ],
+  "routes": [
+    { "from": 1, "to": 2 },
+    { "from": 2, "to": 3 },
+    { "from": 3, "to": 4 }
+  ],
+  "metadata": {
+    "profile": {
+      "name": "Sohayb Baset",
+      "experience": "13+ years",
+      "currentRole": "VP @ Sahat Venture Studio",
+      "expertise": [
+        "Business Development",
+        "Saudi market entry",
+        "Soft-landing programme (35+ companies)"
+      ],
+      "notableExit": "Ph Store",
+      "education": "MBA Strategic Management — Grinta"
+    },
+    "targetKeywords": [
+      "VP Business Development",
+      "Director Business Development",
+      "General Manager",
+      "Country Manager",
+      "Head of Strategy",
+      "Market Entry"
+    ],
+    "targetLocation": "Riyadh, Saudi Arabia"
+  }
+}

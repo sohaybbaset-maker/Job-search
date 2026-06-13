@@ -1,0 +1,110 @@
+{
+  "name": "Michael Page Riyadh Job Search",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.michaelpage.com.sa/jobs/business-development#category=business-development&location=riyadh&contractType=permanent",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "name": "Fetch Michael Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $input.first().json.data;\nconst jobs = [];\nconst regex = /<h2[^>]*class=\"[^\"]*job-title[^\"]*\"[^>]*>([\\s\\S]*?)<\\/h2>/gi;\nlet match;\nwhile ((match = regex.exec(html)) !== null) {\n  jobs.push({ title: match[1].replace(/<[^>]+>/g, '').trim() });\n}\nreturn jobs.length > 0 ? jobs : [{ title: 'No new roles found — check manually at michaelpage.com.sa' }];"
+      },
+      "name": "Parse Job Listings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date().toISOString().split('T')[0];\nconst jobs = $input.all();\nconst list = jobs.map((j, i) => `${i + 1}. ${j.json.title}`).join('\\n');\nconst body = `Daily Job Search Report — ${today}\\n\\nMichael Page · Riyadh · Business Development / Strategy\\n\\n${list}\\n\\nView all: https://www.michaelpage.com.sa/jobs/business-development#location=riyadh`;\nreturn [{ json: { subject: `Job Search Report ${today}`, body } }];"
+      },
+      "name": "Build Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "sohaybbaset@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1",
+          "name": "Gmail — sohaybbaset"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [{ "node": "Fetch Michael Page", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Michael Page": {
+      "main": [
+        [{ "node": "Parse Job Listings", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Job Listings": {
+      "main": [
+        [{ "node": "Build Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Email": {
+      "main": [
+        [{ "node": "Send Email", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Daily search on Michael Page for VP/Director/GM roles in Riyadh. Sends results to sohaybbaset@gmail.com every morning at 08:00 AST.",
+    "profile": {
+      "name": "Sohayb Baset",
+      "experience": "13+ years",
+      "currentRole": "VP @ Sahat Venture Studio",
+      "expertise": ["Business Development", "Saudi market entry", "Soft-landing programme"],
+      "education": "MBA Strategic Management — Grinta",
+      "notableExit": "Ph Store"
+    }
+  }
+}
